@@ -4,9 +4,9 @@
 *
 *  TITLE:       UTILS.H
 *
-*  VERSION:     1.10
+*  VERSION:     1.11
 *
-*  DATE:        16 Jun 2025
+*  DATE:        03 Aug 2025
 *
 *  Support routines header file.
 *
@@ -24,6 +24,9 @@ typedef struct _LANGANDCODEPAGE {
 } LANGANDCODEPAGE, * LPTRANSLATE;
 
 #define MAX_FILENAME_BUFFER_LENGTH 1024
+
+#define CONTAINER_RESOURCE_ID     MAKEINTRESOURCE(1000)
+#define CONTAINER_RESOURCE_TYPE   L"RT_RCDATA"
 
 #define DEFAULT_CHUNK_NAME          L"module"
 #define DEFAULT_CHUNK_NAME_NIS      L"nis_module"

@@ -4,9 +4,9 @@
 *
 *  TITLE:       WDEXTRACT.CPP
 *
-*  VERSION:     1.10
+*  VERSION:     1.11
 *
-*  DATE:        16 Jun 2025
+*  DATE:        07 Aug 2025
 *
 *  WDEXTRACT main logic and entrypoint.
 *
@@ -19,7 +19,7 @@
 
 #include "global.h"
 
-#define WDEXTRACT_VERSION           L"wdextract 1.10"
+#define WDEXTRACT_VERSION           L"wdextract 1.11"
 
 /*
 * ExtractContainerOnly
@@ -63,7 +63,7 @@ UINT ExtractContainerOnly(
             break;
         }
 
-        if (FAILED(StringCchPrintf(OutputFileName, FileNameLength, TEXT("%s.rdmx"), BaseName))) {
+        if (FAILED(StringCchPrintf(OutputFileName, FileNameLength, TEXT("%s.rmdx"), BaseName))) {
             Result = ERROR_INSUFFICIENT_BUFFER;
             break;
         }
@@ -846,7 +846,7 @@ void ExtractDataCommand(
         //
         if (NtHeaders->FileHeader.Characteristics & IMAGE_FILE_DLL) {
             if (ExtractContainerOnly) {
-                wprintf_s(L"ExtractDataDll: Attempt to extract raw RDMX data from VDM container\r\n");
+                wprintf_s(L"ExtractDataDll: Attempt to extract raw RMDX data from VDM container\r\n");
             }
             else {
                 wprintf_s(L"ExtractDataDll: Attempt to unpack VDM container\r\n");
@@ -863,7 +863,7 @@ void ExtractDataCommand(
         }
         else {
             if (ExtractContainerOnly) {
-                wprintf_s(L"ExtractDataEXE: Attempt to extract raw RDMX data from MRT container\r\n");
+                wprintf_s(L"ExtractDataEXE: Attempt to extract raw RMDX data from MRT container\r\n");
             }
             else {
                 wprintf_s(L"ExtractDataEXE: Attempt to extract and decrypt MRT container\r\n");

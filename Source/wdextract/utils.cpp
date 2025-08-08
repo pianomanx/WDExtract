@@ -4,9 +4,9 @@
 *
 *  TITLE:       UTILS.CPP
 *
-*  VERSION:     1.10
+*  VERSION:     1.11
 *
-*  DATE:        16 Jun 2025
+*  DATE:        07 Aug 2025
 *
 *  Program global support routines, ZLib, containers.
 *
@@ -24,8 +24,6 @@
 #include "zlib.h"
 
 #define ZLIB_CHUNK 16384
-#define MAX_DOS_HEADER (256 * (1024 * 1024))
-
 unsigned char ZLib_in[ZLIB_CHUNK];
 unsigned char ZLib_out[ZLIB_CHUNK];
 
@@ -125,7 +123,7 @@ PBYTE GetContainerFromResource(
     if (ContainerSize)
         *ContainerSize = 0;
 
-    hResInfo = FindResource((HMODULE)DllHandle, MAKEINTRESOURCE(1000), L"RT_RCDATA");
+    hResInfo = FindResource((HMODULE)DllHandle, CONTAINER_RESOURCE_ID, CONTAINER_RESOURCE_TYPE);
     if (hResInfo == NULL)
         return NULL;
 
@@ -160,6 +158,7 @@ BOOLEAN IsValidContainer(
 {
     RMDX_HEADER* Header = (RMDX_HEADER*)Container;
     CDATA_HEADER* DataHeader;
+    ULONGLONG endOfHeader;
 
     __try {
 
@@ -173,6 +172,10 @@ BOOLEAN IsValidContainer(
             return FALSE;
 
         if (Header->DataOffset >= Size)
+            return FALSE;
+
+        endOfHeader = (ULONGLONG)Header->DataOffset + (ULONGLONG)sizeof(CDATA_HEADER);
+        if (endOfHeader > (ULONGLONG)Size)
             return FALSE;
 
         DataHeader = (PCDATA_HEADER)RtlOffsetToPointer(Header, Header->DataOffset);
@@ -310,6 +313,13 @@ BOOLEAN ZLibUnpack(
 
     } while (ret != Z_STREAM_END);
 
+    if (ret != Z_STREAM_END) {
+        inflateEnd(&strm);
+        *TotalBytesWritten = totalBytesWritten;
+        *TotalBytesRead = CurrentPosition;
+        return FALSE;
+    }
+
     inflateEnd(&strm);
 
     *TotalBytesWritten = totalBytesWritten;
@@ -335,8 +345,8 @@ void ShowWin32Error(
     SIZE_T bufSize;
 
     if (FormatMessage(
-        FORMAT_MESSAGE_ALLOCATE_BUFFER | 
-        FORMAT_MESSAGE_FROM_SYSTEM | 
+        FORMAT_MESSAGE_ALLOCATE_BUFFER |
+        FORMAT_MESSAGE_FROM_SYSTEM |
         FORMAT_MESSAGE_IGNORE_INSERTS,
         NULL,
         ErrorCode,
@@ -349,7 +359,7 @@ void ShowWin32Error(
         if (lpDisplayBuf) {
 
             StringCchPrintf((LPWSTR)lpDisplayBuf,
-                LocalSize(lpDisplayBuf) / sizeof(CHAR),
+                LocalSize(lpDisplayBuf) / sizeof(WCHAR),
                 L"%s failed with error %u: %s",
                 Function, ErrorCode, (LPWSTR)lpMsgBuf);
             wprintf_s(L"%s", (LPWSTR)lpDisplayBuf);
@@ -739,10 +749,18 @@ UINT ExtractDataXML_BruteForce(
     ULONG ctr = 0;
     SIZE_T tl1, tl2;
     CDATA_HEADER_NIS* NisDataHeader = (CDATA_HEADER_NIS*)Container;
-    PWCHAR p = (PWCHAR)&NisDataHeader->Data;
+    PBYTE pBytes = (PBYTE)&NisDataHeader->Data;
     LPWSTR pConverted = NULL;
+    INT nLength;
+    PWCHAR CurrentPosition;
+    PWCHAR MaximumPosition;
+    WCHAR* OpenBlob;
+    ULONG ChunkLength;
+    WCHAR* ptr;
+    DWORD cbBinary;
+    BYTE* pbBinary;
 
-    INT nLength = MultiByteToWideChar(CP_ACP, 0, (CHAR*)p, -1, NULL, 0);
+    nLength = MultiByteToWideChar(CP_UTF8, 0, (CHAR*)pBytes, -1, NULL, 0);
     if (nLength) {
         pConverted = (LPWSTR)LocalAlloc(LMEM_ZEROINIT, (1 + (SIZE_T)nLength) * sizeof(WCHAR));
         if (pConverted) {
@@ -750,14 +768,14 @@ UINT ExtractDataXML_BruteForce(
             tl1 = wcslen(OpenElement);
             tl2 = wcslen(CloseElement);
 
-            MultiByteToWideChar(CP_ACP, 0, (CHAR*)p, -1, pConverted, nLength);
+            MultiByteToWideChar(CP_UTF8, 0, (CHAR*)pBytes, -1, pConverted, nLength);
 
-            PWCHAR CurrentPosition = pConverted;
-            PWCHAR MaximumPosition = (PWCHAR)(pConverted + wcslen(pConverted)) - tl2;
+            CurrentPosition = pConverted;
+            MaximumPosition = (PWCHAR)(pConverted + wcslen(pConverted)) - tl2;
 
             while (CurrentPosition < MaximumPosition) {
 
-                WCHAR* OpenBlob = wcsstr(CurrentPosition, OpenElement);
+                OpenBlob = wcsstr(CurrentPosition, OpenElement);
                 if (OpenBlob) {
 
                     OpenBlob += tl1;
@@ -765,8 +783,8 @@ UINT ExtractDataXML_BruteForce(
                         break;
                     }
 
-                    ULONG ChunkLength = 0;
-                    WCHAR* ptr = OpenBlob;
+                    ChunkLength = 0;
+                    ptr = OpenBlob;
                     while (ptr < MaximumPosition && *ptr != L'<') {
                         ChunkLength++;
                         ptr++;
@@ -774,11 +792,11 @@ UINT ExtractDataXML_BruteForce(
 
                     if (ptr < MaximumPosition && ChunkLength > 0) {
 
-                        DWORD cbBinary = 0;
+                        cbBinary = 0;
                         CryptStringToBinary(OpenBlob, (DWORD)ChunkLength,
                             CRYPT_STRING_BASE64, NULL, (DWORD*)&cbBinary, NULL, NULL);
 
-                        BYTE* pbBinary = (BYTE*)LocalAlloc(LMEM_ZEROINIT, cbBinary);
+                        pbBinary = (BYTE*)LocalAlloc(LMEM_ZEROINIT, cbBinary);
                         if (pbBinary) {
 
                             if (CryptStringToBinary(OpenBlob, (DWORD)ChunkLength,
@@ -788,7 +806,7 @@ UINT ExtractDataXML_BruteForce(
                                     (ULONG_PTR)OpenBlob,
                                     ChunkLength);
 
-                                UINT extractResult = ExtractCallback(szCurrentDirectory, pbBinary, cbBinary, ctr, TRUE);
+                                ULONG extractResult = ExtractCallback(szCurrentDirectory, pbBinary, cbBinary, ctr, TRUE);
                                 if (extractResult == ERROR_SUCCESS) {
                                     ++ctr;
                                 }
